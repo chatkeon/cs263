@@ -40,9 +40,8 @@ def main():
     print json.dumps(dictionary,sort_keys=False,indent=4,separators=(',', ': '))
 
     line = config.readline()
-    while (not line.startswith("handlers:")):
+    while (not line.startswith("- url: /.*")):
         line = config.readline()
-    line = config.readline()
     line = config.readline()
     line = line.split(":")
     main = line[1].split(".")
