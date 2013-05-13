@@ -1,3 +1,5 @@
+from __future__ import with_statement
+
 import os
 import StringIO
 import inspect
@@ -9,6 +11,9 @@ import staticparse
 
 from functools import wraps
 from google.appengine.ext.webapp import Response
+from google.appengine.ext import blobstore
+from google.appengine.api import files
+from google.appengine.api import memcache
 
 flag = 0
 processed = []
@@ -16,31 +21,30 @@ classlist = []
 resources = []
 datatypes = []
 dictionary = collections.OrderedDict()
+blobkey = 0
 
 def description(fn):
-    """
-    A decorator that prints the name of the class of a bound function (IE, a method).
 
-    NOTE: This MUST be the first decorator applied to the function! E.g.:
-
-    @another_decorator
-    @yet_another_decorator
-    @print_class_name
-    def my_fn(stuff):
-    pass
-
-    This is because decorators replace the wrapped function's signature.
-    """
     global processed
     global dictionary
     global flag
     global datatypes
     global classlist
     global resources
+    global blobkey
 
     # run staticparse.py at the very beginning
     if (flag == 0):
         dictionary = staticparse.main()
+        #api = files.blobstore.create(mime_type='application/octet-stream')
+        #with files.open(api, 'a') as f:
+            #f.write('data')
+        #files.finalize(api)
+        #blobkey = files.blobstore.get_blob_key(api)
+
+        #api = blobstore.BlobInfo.get(blobkey)
+        #print "File? ", api.filename
+
         flag = 1
 
     if (not inspect.isclass(fn)):
@@ -50,9 +54,7 @@ def description(fn):
             if args or kwargs:
                 args_map = inspect.getcallargs(fn, *args, **kwargs)
             docstring = fn.__doc__
-            # We assume that if an argument named `self` exists for the wrapped
-            # function, it is bound to a class, and we can get the name of the class
-            # from the 'self' argument.
+
             print "**************************************"
 
             cls = args_map['self'].__class__
@@ -108,13 +110,13 @@ def description(fn):
                     methoddict[ "Method" ] = "None"
 
                 docdict = parsefunctiondoc(docstring)
-                # print "Arguments? ", docdict[ "Arguments" ]
+                print "Arguments? ", docdict[ "Arguments" ]
                 methoddict[ "Description" ] = docdict[ "Description" ]
 
-                # print "Parameters? Maybe? ", args_map['self'].request.params
+                print "Parameters? Maybe? ", args_map['self'].request.params
 
                 if (methoddict[ "Method" ] != "None"):
-                    # print "Request? ", args_map['self'].request
+                    print "Request? ", args_map['self'].request
                     query = args_map['self'].request.query_string
 
                     if (query != ""):
@@ -134,12 +136,13 @@ def description(fn):
                         bindingdict[ "Mode" ] = "url"
                         bindingdict[ "Name" ] = query
                         type = ""
-                        for i in (docdict[ "Arguments" ]):
-                            if (i[ "Name" ] == query):
-                                type = i[ "Type" ]
-                                des = i[ "Description" ]
-                                del i
-                                break
+                        if (docdict[ "Arguments" ] != "Unspecified"):
+                            for i in (docdict[ "Arguments" ]):
+                                if (i[ "Name" ] == query):
+                                    type = i[ "Type" ]
+                                    des = i[ "Description" ]
+                                    del i
+                                    break
                         if (type == ""):
                             type = "Unknown"
                             des = "Unknown"
@@ -152,30 +155,36 @@ def description(fn):
                     req = str(args_map['self'].request)
                     req = req.split('\n')
 
+                    inputtype = []
                     for i in req:
                         if i.startswith('Content-Type: '):
                             inputtype = i.split(';')
                             break
 
-                    inputtype = inputtype[0].split(' ')
-                    inputtype = inputtype[1].strip()
-                    if (inputtype != ""):
-                        inputdict = collections.OrderedDict()
-                        inputdict[ "Content type" ] = inputtype
-                        inputdict[ "Type" ] = docdict[ "Arguments" ]
-                        methoddict[ "Input" ] = inputdict
-                    elif (query != ""):
-                        inputdict = collections.OrderedDict()
-                        params = []
-                        paramdict = collections.OrderedDict()
-                        paramdict[ "binding" ] = query + "IdBinding"
-                        params.append(paramdict)
-                        inputdict[ "Params" ] = params
-                        methoddict[ "Input" ] = inputdict
+                    if (inputtype != [] or query != ""):
+                        inputs = []
+                        if (query != ""):
+                            inputdict = collections.OrderedDict()
+                            params = []
+                            paramdict = collections.OrderedDict()
+                            paramdict[ "binding" ] = query + "IdBinding"
+                            params.append(paramdict)
+                            inputdict[ "Params" ] = params
+                            inputs.append(inputdict)
+                        if (inputtype != []):
+                            inputtype = inputtype[0].split(' ')
+                            inputtype = inputtype[1].strip()
+                            if (inputtype != ""):
+                                inputdict = collections.OrderedDict()
+                                inputdict[ "Content type" ] = inputtype
+                                inputdict[ "Type" ] = docdict[ "Arguments" ]
+                                inputs.append(inputdict)
+
+                        methoddict[ "Input" ] = inputs
 
                     outputdict = collections.OrderedDict()
 
-                    # print "Response? ", args_map['self'].response
+                    print "Response? ", args_map['self'].response
                     resp = args_map['self'].response
                     code = str(resp).split(' ')
                     status = code[0]
@@ -205,8 +214,23 @@ def description(fn):
 
                     dictionary[ "Resources" ] = resources
                     dictionary[ "DataTypes" ] = datatypes
+
+                    # data = json.dumps(dictionary,indent=4,separators=(',', ': '))
+                    data = memcache.get("apidescription")
+                    if (data is not None):
+                        memcache.replace(key="apidescription", value=dictionary, time=3600)
+                        print "Rewrote here"
+                    else:
+                        memcache.add(key="apidescription", value=dictionary, time=3600)
+                        print "Added"
+
+                    # print data
                     print json.dumps(dictionary,indent=4,separators=(',', ': '))
-                    print "**************************************"
+                    #api = blobstore.BlobInfo.get(blobkey)
+                    #with files.open(api.filename, 'a') as f:
+                    #    f.write(data)
+                    #files.finalize(api.filename)
+                    # print "**************************************"
 
             return fn(*args, **kwargs)
         return inner
@@ -217,9 +241,15 @@ def description(fn):
             datatypes.append(datatypedict)
             dictionary[ "Resources" ] = resources
             dictionary[ "DataTypes" ] = datatypes
-        #print "Class list: ", classlist
+        # print "Class list: ", classlist
         print "**************************************"
-        print json.dumps(dictionary,indent=4,separators=(',', ': '))
+        data = memcache.get("apidescription")
+        if (data is not None):
+            memcache.replace(key="apidescription", value=dictionary, time=3600)
+            print "Rewrote here"
+        else:
+            memcache.add(key="apidescription", value=dictionary, time=3600)
+            print "Added"
         print "**************************************"
         return fn
 

@@ -11,6 +11,8 @@ JINJA_ENVIRONMENT = jinja2.Environment(
 
 from google.appengine.ext import db
 from google.appengine.api import users
+from google.appengine.api import memcache
+from webapp2_extras import json
 
 @pythonDecorator.description
 class Greeting(db.Model):
@@ -116,7 +118,15 @@ class Guestbook(webapp2.RequestHandler):
         self.redirect('/?' + urllib.urlencode(query_params))
         #self.response.headers.add_header('Location',self.request.url + '/?guestbook_name=')
 
+class APIDes(webapp2.RequestHandler):
+
+    # @pythonDecorator.description
+    def get(self):
+        data = memcache.get("apidescription")
+        self.response.headers['Content-Type'] = 'application/json'
+        self.response.write(json.encode(data,indent=4,separators=(',', ': ')))
 
 app = webapp2.WSGIApplication([('/', MainPage),
-                               ('/sign', Guestbook)],
+                               ('/sign', Guestbook),
+                               ('/options', APIDes)],
                               debug=True)
