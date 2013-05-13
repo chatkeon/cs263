@@ -12,15 +12,16 @@ JINJA_ENVIRONMENT = jinja2.Environment(
 from google.appengine.ext import db
 from google.appengine.api import users
 
+@pythonDecorator.description
 class Greeting(db.Model):
     """
     Models an individual Guestbook entry
     with author, content, and date.
 
     Attributes:
-        string author: the author
-        string content: the content
-        DateTime date: the date and time
+        author:
+        content: string: the content
+        date: DateTime:
 
     """
     author = db.StringProperty()
@@ -56,7 +57,7 @@ class MainPage(webapp2.RequestHandler):
 
         Args:
             guestbook_name: string: a string
-            testing: integer
+            testing:
             something: blah blah
 
         Returns:
@@ -113,6 +114,7 @@ class Guestbook(webapp2.RequestHandler):
 
         query_params = {'guestbook_name': guestbook_name}
         self.redirect('/?' + urllib.urlencode(query_params))
+        #self.response.headers.add_header('Location',self.request.url + '/?guestbook_name=')
 
 
 app = webapp2.WSGIApplication([('/', MainPage),

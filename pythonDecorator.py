@@ -14,8 +14,8 @@ flag = 0
 processed = []
 classlist = []
 resources = []
+datatypes = []
 dictionary = collections.OrderedDict()
-dataTypes = []
 
 def description(fn):
     """
@@ -34,7 +34,7 @@ def description(fn):
     global processed
     global dictionary
     global flag
-    global dataTypes
+    global datatypes
     global classlist
     global resources
 
@@ -55,14 +55,14 @@ def description(fn):
             # from the 'self' argument.
             print "**************************************"
 
-            # if 'self' in args_map:
-            # check for inputBindings here
             cls = args_map['self'].__class__
             checkproc = fn.__name__ + cls.__name__
 
             if (checkproc not in processed):
 
                 processed.append(checkproc)
+
+                update = 0
 
                 if (cls.__name__ not in classlist):
                     operations = []
@@ -71,6 +71,7 @@ def description(fn):
                     # find class in list of resources
                     for i in (dictionary[ "Resources" ]):
                         if (i[ "Name" ] == cls.__name__):
+                            update = 1
                             operations = i[ "Operations" ]
                             break
 
@@ -110,7 +111,7 @@ def description(fn):
                 # print "Arguments? ", docdict[ "Arguments" ]
                 methoddict[ "Description" ] = docdict[ "Description" ]
 
-                print "Parameters? Maybe? ", args_map['self'].request.params
+                # print "Parameters? Maybe? ", args_map['self'].request.params
 
                 if (methoddict[ "Method" ] != "None"):
                     # print "Request? ", args_map['self'].request
@@ -118,17 +119,13 @@ def description(fn):
 
                     if (query != ""):
 
+                        inputbindings = []
+
                         if "Resources" in dictionary:
                             for i in (dictionary[ "Resources" ]):
                                 if (i[ "Name" ] == cls.__name__):
                                     if "InputBindings" in i:
                                         inputbindings = i[ "InputBindings" ]
-                                    else:
-                                        inputbindings = []
-                                else:
-                                    inputbindings = []
-                        else:
-                            inputbindings = []
 
                         bindingdict = collections.OrderedDict()
                         query = query.split("=")
@@ -141,6 +138,8 @@ def description(fn):
                             if (i[ "Name" ] == query):
                                 type = i[ "Type" ]
                                 des = i[ "Description" ]
+                                del i
+                                break
                         if (type == ""):
                             type = "Unknown"
                             des = "Unknown"
@@ -169,7 +168,7 @@ def description(fn):
                         inputdict = collections.OrderedDict()
                         params = []
                         paramdict = collections.OrderedDict()
-                        paramdict[ "binding" ] = query
+                        paramdict[ "binding" ] = query + "IdBinding"
                         params.append(paramdict)
                         inputdict[ "Params" ] = params
                         methoddict[ "Input" ] = inputdict
@@ -187,29 +186,42 @@ def description(fn):
                     outputtype = outputtype[1].strip()
                     outputdict[ "Content type" ] = outputtype
                     outputdict[ "Type" ] = docdict[ "Returns" ]
+                    if (resp.location != None):
+                        headerdict = collections.OrderedDict()
+                        headerdict[ "Name" ] = "Location"
+                        headerdict[ "Type" ] = "href"
+                        headerdict[ "Ref" ] = str(resp.location)
+                        outputdict[ "Headers" ] = headerdict
+                    else:
+                        outputdict[ "Headers" ] = "None"
                     methoddict[ "Output" ] = outputdict
                     methoddict[ "Errors" ] = docdict[ "Errors" ]
 
                     operations.append(methoddict)
                     classdict[ "Operations" ] = operations
-                    resources.append(classdict)
+
+                    if (update == 0):
+                        resources.append(classdict)
+
                     dictionary[ "Resources" ] = resources
+                    dictionary[ "DataTypes" ] = datatypes
                     print json.dumps(dictionary,indent=4,separators=(',', ': '))
                     print "**************************************"
 
             return fn(*args, **kwargs)
         return inner
-    #else:
-        #if (not fn.__name__ in classlist):
-            #classlist.append(fn.__name__)
-            #classdict = parseclassdoc(fn)
-            #dataTypes.append(classdict)
-            #dictionary[ "dataTypes" ] = dataTypes
+    else:
+        if (not fn.__name__ in classlist):
+            classlist.append(fn.__name__)
+            datatypedict = parsedatatypedoc(fn)
+            datatypes.append(datatypedict)
+            dictionary[ "Resources" ] = resources
+            dictionary[ "DataTypes" ] = datatypes
         #print "Class list: ", classlist
-        #print "**************************************"
-        #print json.dumps(dictionary,indent=4,separators=(',', ': '))
-        #print "**************************************"
-        #return fn
+        print "**************************************"
+        print json.dumps(dictionary,indent=4,separators=(',', ': '))
+        print "**************************************"
+        return fn
 
 def parsefunctiondoc(docstring):
     docdict = collections.OrderedDict()
@@ -245,14 +257,20 @@ def parsefunctiondoc(docstring):
         argline = docstring[i].split(":")
         if (len(argline) == 1):
             break
+        elif (len(argline) == 2):
+            argtype = argline[1].strip()
+            if (argtype == ""):
+                argtype = "Unspecified"
+            argdes = "Unspecified"
         else:
-            argdict = collections.OrderedDict()
-            argdict[ "Name" ] = str(argline[0].strip())
-            argdict[ "Type" ] = str(argline[1].strip())
-            if (len(argline) == 3):
-                argdict[ "Description" ] = str(argline[2].strip())
-            else:
-                argdict[ "Description" ] = "Unspecified"
+            argtype = argline[1].strip()
+            argdes = argline[2].strip()
+            if (argdes == ""):
+                argdes = "Unspecified"
+        argdict = collections.OrderedDict()
+        argdict[ "Name" ] = argline[0].strip()
+        argdict[ "Description" ] = argdes
+        argdict[ "Type" ] = argtype
         arguments.append(argdict)
         i = i + 1
     docdict[ "Arguments" ] = arguments
@@ -303,23 +321,21 @@ def parsefunctiondoc(docstring):
     docdict[ "Errors" ] = errors
     return docdict
 
-def parseclassdoc(classobj):
+def parsedatatypedoc(classobj):
     docstring = classobj.__doc__
     classdict = collections.OrderedDict()
-    classdict[ "Name" ] = classobj.__name__
+    classdict[ "Name" ] = classobj.__name__ + "DataModel"
     global dataTypes
     if (docstring == None):
         classdict[ "Description" ] = "Unspecified"
         classdict[ "Fields" ] = "Unspecified"
-        dataTypes.append(classdict)
-        return
+        return classdict
     docstring = docstring.split("\n")
     docsize = len(docstring)
     if (docsize == 1):
         classdict[ "Description" ] = docstring[0].strip()
         classdict[ "Fields" ] = "Unspecified"
-        dataTypes.append(classdict)
-        return
+        return classdict
     docsize = docsize - 1
     description = ""
     i = 0
@@ -329,21 +345,28 @@ def parseclassdoc(classobj):
     classdict[ "Description" ] = description.strip()
     if (i == docsize):
         classdict[ "Fields" ] = "Unspecified"
-        dataTypes.append(classdict)
-        return
+        return classdict
     fields = []
     i = i + 1
     while(i<docsize-1):
         fielddict = collections.OrderedDict()
         argline = docstring[i].split(":")
         if (len(argline) == 1):
+            fieldtype = "Unspecified"
+            fielddes = "Unspecified"
+        elif (len(argline) == 2):
+            fieldtype = argline[1].strip()
+            if (fieldtype == ""):
+                fieldtype = "Unspecified"
             fielddes = "Unspecified"
         else:
-            fielddes = argline[1].strip()
-        argline = argline[0].split()
-        fielddict[ "Name" ] = argline[1].strip()
+            fieldtype = argline[1].strip()
+            fielddes = argline[2].strip()
+            if (fielddes == ""):
+                fielddes = "Unspecified"
+        fielddict[ "Name" ] = argline[0].strip()
         fielddict[ "Description" ] = fielddes
-        fielddict[ "Type" ] = argline[0].strip()
+        fielddict[ "Type" ] = fieldtype
         fields.append(fielddict)
         i = i + 1
     classdict[ "Fields" ] = fields
