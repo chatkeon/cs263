@@ -12,7 +12,6 @@ JINJA_ENVIRONMENT = jinja2.Environment(
 from google.appengine.ext import db
 from google.appengine.api import users
 
-@pythonDecorator.description
 class Greeting(db.Model):
     """
     Models an individual Guestbook entry
@@ -28,7 +27,6 @@ class Greeting(db.Model):
     content = db.StringProperty(multiline=True)
     date = db.DateTimeProperty(auto_now_add=True)
 
-@pythonDecorator.description
 def guestbook_key(guestbook_name=None):
     """
     Constructs a Datastore key for a Guestbook entity with guestbook_name.
@@ -44,7 +42,6 @@ def guestbook_key(guestbook_name=None):
     """
     return db.Key.from_path('Guestbook', guestbook_name or 'default_guestbook')
 
-@pythonDecorator.description
 class MainPage(webapp2.RequestHandler):
     """
     Description.
@@ -58,7 +55,7 @@ class MainPage(webapp2.RequestHandler):
         Get method for class MainPage.
 
         Args:
-            guestbook_name: string
+            guestbook_name: string: a string
             testing: integer
             something: blah blah
 
@@ -91,9 +88,6 @@ class MainPage(webapp2.RequestHandler):
         template = JINJA_ENVIRONMENT.get_template('index.html')
         self.response.write(template.render(template_values))
 
-        print "URL? ", self.request.query_string
-
-@pythonDecorator.description
 class Guestbook(webapp2.RequestHandler):
 
     @pythonDecorator.description
