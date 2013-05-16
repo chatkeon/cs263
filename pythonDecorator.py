@@ -1,6 +1,7 @@
 from __future__ import with_statement
 
 import os
+import sys
 import StringIO
 import inspect
 import tokenize
@@ -20,6 +21,14 @@ processed = []
 classlist = []
 resources = []
 datatypes = []
+types = []
+validtypes = [ "bool", "boolean", "none", "type", "int", "long", "float", "complex",
+                "str", "string", "unicode", "tuple", "list", "dict", "dictionary",
+                "function", "lambda", "generator", "code", "class", "instance",
+                "method", "unbound method", "builtinfunction", "builtinmethod",
+                "module", "file", "xrange", "slice", "ellipsis", "traceback",
+                "frame", "buffer", "dictproxy", "notimplemented", "getsetdescriptor",
+                "memberdescriptor" ]
 dictionary = collections.OrderedDict()
 blobkey = 0
 
@@ -29,6 +38,8 @@ def description(fn):
     global dictionary
     global flag
     global datatypes
+    global validtypes
+    global types
     global classlist
     global resources
     global blobkey
@@ -118,8 +129,10 @@ def description(fn):
                 if (methoddict[ "Method" ] != "None"):
                     print "Request? ", args_map['self'].request
                     query = args_map['self'].request.query_string
+                    query = query.split("=")
+                    query = query[0].strip()
 
-                    if (query != ""):
+                    if (docdict[ "Bindings" ] != "Unspecified"):
 
                         inputbindings = []
 
@@ -129,26 +142,28 @@ def description(fn):
                                     if "InputBindings" in i:
                                         inputbindings = i[ "InputBindings" ]
 
-                        bindingdict = collections.OrderedDict()
-                        query = query.split("=")
-                        query = query[0].strip()
-                        bindingdict[ "ID" ] = query + "IdBinding"
-                        bindingdict[ "Mode" ] = "url"
-                        bindingdict[ "Name" ] = query
-                        type = ""
-                        if (docdict[ "Arguments" ] != "Unspecified"):
-                            for i in (docdict[ "Arguments" ]):
-                                if (i[ "Name" ] == query):
-                                    type = i[ "Type" ]
-                                    des = i[ "Description" ]
-                                    del i
-                                    break
-                        if (type == ""):
-                            type = "Unknown"
-                            des = "Unknown"
-                        bindingdict[ "Type" ] = type
-                        bindingdict[ "Description" ] = des
-                        inputbindings.append(bindingdict)
+                        for i in (docdict[ "Bindings" ]):
+                            if (i not in inputbindings):
+                                inputbindings.append(i)
+
+                        #bindingdict = collections.OrderedDict()
+                        #bindingdict[ "ID" ] = query + "Binding"
+                        #bindingdict[ "Mode" ] = "url"
+                        #bindingdict[ "Name" ] = query
+                        #type = ""
+                        #if (docdict[ "Arguments" ] != "Unspecified"):
+                            #for i in (docdict[ "Arguments" ]):
+                                #if (i[ "Name" ] == query):
+                                    #type = i[ "Type" ]
+                                    #des = i[ "Description" ]
+                                    #del i
+                                    #break
+                        #if (type == ""):
+                            #type = "Unknown"
+                            #des = "Unknown"
+                        #bindingdict[ "Type" ] = type
+                        #bindingdict[ "Description" ] = des
+
                         classdict[ "InputBindings" ] = inputbindings
 
                     # print "Method? ", args_map['self'].request.method
@@ -161,14 +176,43 @@ def description(fn):
                             inputtype = i.split(';')
                             break
 
-                    if (inputtype != [] or query != ""):
+                    if (inputtype != [] or query != "" or docdict[ "Bindings" ] != "Unspecified"):
                         inputs = []
+                        inputdict = collections.OrderedDict()
+                        params = []
+                        if (docdict[ "Bindings" ] != "Unspecified"):
+                            for i in (docdict[ "Bindings" ]):
+                                paramdict = collections.OrderedDict()
+                                paramdict[ "Binding" ] = i[ "ID" ]
+                                params.append(paramdict)
                         if (query != ""):
-                            inputdict = collections.OrderedDict()
-                            params = []
                             paramdict = collections.OrderedDict()
-                            paramdict[ "binding" ] = query + "IdBinding"
+                            paramdict[ "Mode" ] = "query"
+                            paramdict[ "Name" ] = query
+
+                            type = ""
+                            if (docdict[ "Arguments" ] != "Unspecified"):
+                                for i in (docdict[ "Arguments" ]):
+                                    if (i[ "Name" ] == query):
+                                        type = i[ "Type" ]
+                                        des = i[ "Description" ]
+                                        (docdict[ "Arguments" ]).remove(i)
+                                        break
+
+                            print "Doc string? ", docdict[ "Arguments" ]
+
+                            if (type == ""):
+                                type = "Unspecified"
+                                des = "Unspecified"
+
+                            paramdict[ "Type" ] = type
+
+                            if (type not in types):
+                                types.append(type)
+
+                            paramdict[ "Description" ] = des
                             params.append(paramdict)
+                        if (params != []):
                             inputdict[ "Params" ] = params
                             inputs.append(inputdict)
                         if (inputtype != []):
@@ -177,7 +221,14 @@ def description(fn):
                             if (inputtype != ""):
                                 inputdict = collections.OrderedDict()
                                 inputdict[ "Content type" ] = inputtype
-                                inputdict[ "Type" ] = docdict[ "Arguments" ]
+                                if (len(docdict[ "Arguments" ]) != 1):
+                                    validate(100)
+                                inputargs = (docdict[ "Arguments" ])[0]
+                                inputdict[ "Type" ] = inputargs[ "Type" ]
+
+                                if (inputdict[ "Type" ] not in types):
+                                    types.append(inputdict[ "Type" ])
+
                                 inputs.append(inputdict)
 
                         methoddict[ "Input" ] = inputs
@@ -185,26 +236,49 @@ def description(fn):
                     outputdict = collections.OrderedDict()
 
                     print "Response? ", args_map['self'].response
-                    resp = args_map['self'].response
-                    code = str(resp).split(' ')
-                    status = code[0]
-                    outputdict[ "Status" ] = status
-                    header = resp.headers
-                    outputtype = str(header).split(';')
-                    outputtype = outputtype[0].split(':')
-                    outputtype = outputtype[1].strip()
-                    outputdict[ "Content type" ] = outputtype
-                    outputdict[ "Type" ] = docdict[ "Returns" ]
-                    if (resp.location != None):
-                        headerdict = collections.OrderedDict()
-                        headerdict[ "Name" ] = "Location"
-                        headerdict[ "Type" ] = "href"
-                        headerdict[ "Ref" ] = str(resp.location)
-                        outputdict[ "Headers" ] = headerdict
-                    else:
-                        outputdict[ "Headers" ] = "None"
-                    methoddict[ "Output" ] = outputdict
-                    methoddict[ "Errors" ] = docdict[ "Errors" ]
+
+                    resp = str(args_map['self'].response)
+                    resp = resp.split('\n')
+
+                    outputtype = []
+                    for i in resp:
+                        if i.startswith('Content-Type: '):
+                            outputtype = i.split(';')
+                            break
+
+                    if (outputtype != ""):
+                        resp = args_map['self'].response
+                        code = str(resp).split(' ')
+                        status = code[0]
+                        outputdict[ "Status" ] = status
+                        header = resp.headers
+                        outputtype = str(header).split(';')
+                        outputtype = outputtype[0].split(':')
+                        outputtype = outputtype[1].strip()
+                        outputdict[ "Content type" ] = outputtype
+                        outputdict[ "Type" ] = docdict[ "Returns" ]
+
+                        if (len(docdict[ "Returns" ]) != 1):
+                            validate(200)
+
+                        outputargs = (docdict[ "Returns" ])[0]
+                        outputdict[ "Type" ] = outputargs[ "Type" ]
+
+                        if (outputdict[ "Type" ] not in types):
+                            types.append(outputdict[ "Type" ])
+
+                        #if (resp.location != None):
+                            #headerdict = collections.OrderedDict()
+                            #headerdict[ "Name" ] = "Location"
+                            #headerdict[ "Type" ] = "href"
+                            #headerdict[ "Ref" ] = str(resp.location)
+                            #outputdict[ "Headers" ] = headerdict
+                        #else:
+                            #outputdict[ "Headers" ] = "None"
+                        methoddict[ "Output" ] = outputdict
+
+                    if (docdict[ "Errors" ] != "Unspecified"):
+                        methoddict[ "Errors" ] = docdict[ "Errors" ]
 
                     operations.append(methoddict)
                     classdict[ "Operations" ] = operations
@@ -254,10 +328,12 @@ def description(fn):
         return fn
 
 def parsefunctiondoc(docstring):
+    global types
     docdict = collections.OrderedDict()
     if (docstring == None):
         docdict[ "Description" ] = "Unspecified"
         docdict[ "Arguments" ] = "Unspecified"
+        docdict[ "Bindings" ] = "Unspecified"
         docdict[ "Returns" ] = "Unspecified"
         docdict[ "Errors" ] = "Unspecified"
         return docdict
@@ -266,6 +342,7 @@ def parsefunctiondoc(docstring):
     if (docsize == 1):
         docdict[ "Description" ] = docstring[0].strip()
         docdict[ "Arguments" ] = "Unspecified"
+        docdict[ "Bindings" ] = "Unspecified"
         docdict[ "Returns" ] = "Unspecified"
         docdict[ "Errors" ] = "Unspecified"
         return docdict
@@ -275,9 +352,13 @@ def parsefunctiondoc(docstring):
     while(i<docsize and (not (docstring[i].strip()).startswith("Args"))):
         description = description + str(docstring[i].strip()) + " "
         i = i + 1
-    docdict[ "Description" ] = description.strip()
+    if (description.strip() == ""):
+        docdict[ "Description" ] = "Unspecified"
+    else:
+        docdict[ "Description" ] = description.strip()
     if (i == docsize):
         docdict[ "Arguments" ] = "Unspecified"
+        docdict[ "Bindings" ] = "Unspecified"
         docdict[ "Returns" ] = "Unspecified"
         docdict[ "Errors" ] = "Unspecified"
         return docdict
@@ -301,9 +382,68 @@ def parsefunctiondoc(docstring):
         argdict[ "Name" ] = argline[0].strip()
         argdict[ "Description" ] = argdes
         argdict[ "Type" ] = argtype
+
+        if (argdict[ "Type" ] not in types):
+            types.append(argdict[ "Type" ])
+
         arguments.append(argdict)
         i = i + 1
-    docdict[ "Arguments" ] = arguments
+    if (arguments == []):
+        docdict[ "Arguments" ] = "Unspecified"
+    else:
+        docdict[ "Arguments" ] = arguments
+    if (i == docsize):
+        docdict[ "Bindings" ] = "Unspecified"
+        docdict[ "Returns" ] = "Unspecified"
+        docdict[ "Errors" ] = "Unspecified"
+        return docdict
+    while(i<docsize and (not (docstring[i].strip()).startswith("Bindings"))):
+        description = description + str(docstring[i].strip()) + " "
+        i = i + 1
+    if (i == docsize):
+        docdict[ "Bindings" ] = "Unspecified"
+        docdict[ "Returns" ] = "Unspecified"
+        docdict[ "Errors" ] = "Unspecified"
+        return docdict
+    bindings = []
+    i = i + 1
+    while(i<docsize):
+        bindline = docstring[i].split(":")
+        if (len(bindline) == 1):
+            break
+        elif (len(bindline) == 2):
+            bindtype = bindline[1].strip()
+            if (bindtype == ""):
+                bindtype = "Unspecified"
+                binddes = "Unspecified"
+                bindmode = "Unspecified"
+        elif (len(bindline) == 3):
+            binddes = bindline[2].strip()
+            if (binddes == ""):
+                binddes = "Unspecified"
+                bindmode = "Unspecified"
+        else:
+            bindtype = bindline[1].strip()
+            binddes = bindline[2].strip()
+            bindmode = bindline[3].strip()
+            if (bindmode == ""):
+                bindmode = "Unspecified"
+        binddict = collections.OrderedDict()
+        binddict[ "ID" ] = bindline[0].strip() + "Binding"
+        binddict[ "Mode" ] = bindmode
+        binddict[ "Name" ] = bindline[0].strip()
+        binddict[ "Description" ] = binddes
+        binddict[ "Type" ] = bindtype
+
+        if (binddict[ "Type" ] not in types):
+            types.append(binddict[ "Type" ])
+
+        bindings.append(binddict)
+        i = i + 1
+    if (bindings == []):
+        docdict[ "Bindings" ] = "Unspecified"
+    else:
+        docdict[ "Bindings" ] = bindings
     if (i == docsize):
         docdict[ "Returns" ] = "Unspecified"
         docdict[ "Errors" ] = "Unspecified"
@@ -314,16 +454,31 @@ def parsefunctiondoc(docstring):
         docdict[ "Returns" ] = "Unspecified"
         docdict[ "Errors" ] = "Unspecified"
         return docdict
-    returns = ""
+    returns = []
     i = i + 1
     while(i<docsize):
         retline = docstring[i].split(":")
         if (len(retline) == 1):
             break
         else:
-            returns = returns + str(retline[1].strip())
+            rettype = retline[1].strip()
+            retdes = retline[2].strip()
+            if (retdes == ""):
+                retdes = "Unspecified"
+        retdict = collections.OrderedDict()
+        retdict[ "Name" ] = retline[0].strip()
+        retdict[ "Description" ] = retdes
+        retdict[ "Type" ] = rettype
+
+        if (retdict[ "Type" ] not in types):
+            types.append(retdict[ "Type" ])
+
+        returns.append(retdict)
         i = i + 1
-    docdict[ "Returns" ] = returns
+    if (returns == []):
+        docdict[ "Returns" ] = "Unspecified"
+    else:
+        docdict[ "Returns" ] = returns
     if (i == docsize):
         docdict[ "Errors" ] = "Unspecified"
         return docdict
@@ -346,16 +501,21 @@ def parsefunctiondoc(docstring):
         else:
             errdict[ "Status" ] = errline[0].strip()
             errdict[ "Cause" ] = errline[1].strip()
+        if (errdict[ "Cause" ] == ""):
+            errdict[ "Cause" ] = Response.http_status_message(int(errdict[ "Status" ]))
         errors.append(errdict)
         i = i + 1
     docdict[ "Errors" ] = errors
     return docdict
 
 def parsedatatypedoc(classobj):
+    global dataTypes
+    global validtypes
     docstring = classobj.__doc__
     classdict = collections.OrderedDict()
-    classdict[ "Name" ] = classobj.__name__ + "DataModel"
-    global dataTypes
+    classdict[ "Name" ] = classobj.__name__
+    if (classdict[ "Name" ] not in validtypes):
+        validtypes.append( classdict[ "Name" ].lower() )
     if (docstring == None):
         classdict[ "Description" ] = "Unspecified"
         classdict[ "Fields" ] = "Unspecified"
@@ -372,7 +532,10 @@ def parsedatatypedoc(classobj):
     while(i<docsize and (not (docstring[i].strip()).startswith("Attributes"))):
         description = description + str(docstring[i].strip()) + " "
         i = i + 1
-    classdict[ "Description" ] = description.strip()
+    if (description.strip() == ""):
+        classdict[ "Description" ] = "Unspecified"
+    else:
+        classdict[ "Description" ] = description.strip()
     if (i == docsize):
         classdict[ "Fields" ] = "Unspecified"
         return classdict
@@ -401,3 +564,36 @@ def parsedatatypedoc(classobj):
         i = i + 1
     classdict[ "Fields" ] = fields
     return classdict
+
+def validate(num):
+    global types
+    global validtypes
+    global dictionary
+
+    if (num == 100):
+        print "ERROR: Too many arguments!"
+        sys.exit()
+
+    if (num == 200):
+        print "ERROR: More than one return type!"
+        sys.exit()
+
+    if (dictionary[ "Resources" ] == []):
+        return 1
+    else:
+        for i in (dictionary[ "Resources" ]):
+            if (i[ "Operations" ] == []):
+                return 2
+
+    # print "Types: ", types
+    # print "Valid Types: ", validtypes
+
+    for i in types:
+        if (i.lower()) not in validtypes:
+            return -1
+        if (i == "Unspecified"):
+            return -2
+        if (i == "Unknown"):
+            return -3
+
+    return 0

@@ -1,79 +1,102 @@
 import cgi
-import datetime
 import urllib
-import webapp2
-import jinja2
-import os
-import pythonDecorator
 
-JINJA_ENVIRONMENT = jinja2.Environment(
-    loader=jinja2.FileSystemLoader(os.path.dirname(__file__)))
-
-from google.appengine.ext import db
 from google.appengine.api import users
+from google.appengine.ext import ndb
 from google.appengine.api import memcache
 from webapp2_extras import json
 
+import webapp2
+import pythonDecorator
+
+MAIN_PAGE_FOOTER_TEMPLATE = """\
+    <form action="/sign?%s" method="post">
+      <div><textarea name="content" rows="3" cols="60"></textarea></div>
+      <div><input type="submit" value="Sign Guestbook"></div>
+    </form>
+
+    <hr>
+
+    <form>Guestbook name:
+      <input value="%s" name="guestbook_name">
+      <input type="submit" value="switch">
+    </form>
+
+    <a href="%s">%s</a>
+
+  </body>
+</html>
+"""
+
+DEFAULT_GUESTBOOK_NAME = 'default_guestbook'
+
+
+# We set a parent key on the 'Greetings' to ensure that they are all in the same
+# entity group. Queries across the single entity group will be consistent.
+# However, the write rate should be limited to ~1/second.
+
+def guestbook_key(guestbook_name=DEFAULT_GUESTBOOK_NAME):
+    """Constructs a Datastore key for a Guestbook entity with guestbook_name."""
+    return ndb.Key('Guestbook', guestbook_name)
+
 @pythonDecorator.description
-class Greeting(db.Model):
+class Greeting(ndb.Model):
     """
     Models an individual Guestbook entry
     with author, content, and date.
 
     Attributes:
-        author:
-        content: string: the content
-        date: DateTime:
+        author: string: the author of the greeting
+        content: string: the content of the greeting
+        date: string: the date of the greeting
 
     """
-    author = db.StringProperty()
-    content = db.StringProperty(multiline=True)
-    date = db.DateTimeProperty(auto_now_add=True)
+    author = ndb.UserProperty()
+    content = ndb.StringProperty(indexed=False)
+    date = ndb.DateTimeProperty(auto_now_add=True)
 
-def guestbook_key(guestbook_name=None):
-    """
-    Constructs a Datastore key for a Guestbook entity with guestbook_name.
-
-    Args:
-        guestbook_name: string
-        testing: integer
-        something: blah blah
-
-    Returns:
-        db.Key: key
-
-    """
-    return db.Key.from_path('Guestbook', guestbook_name or 'default_guestbook')
 
 class MainPage(webapp2.RequestHandler):
-    """
-    Description.
-    More description.
-
-    """
 
     @pythonDecorator.description
     def get(self):
         """
-        Get method for class MainPage.
+        Get the guestbook entries to display on the main page.
 
         Args:
-            guestbook_name: string: a string
-            testing:
-            something: blah blah
+            guestbook_name: string: the name of the guestbook
+
+        Bindings:
 
         Returns:
-            db.Key: key
+            db.Key: string: database key for identifying the guestbook
 
         Exceptions:
-            404: blah blah
-            500
+            404:
+            500: internal server error
 
         """
-        guestbook_name=self.request.get('guestbook_name')
-        greetings_query = Greeting.all().ancestor(
-            guestbook_key(guestbook_name)).order('-date')
+        self.response.write('<html><body>')
+        guestbook_name = self.request.get('guestbook_name',
+                                          DEFAULT_GUESTBOOK_NAME)
+
+        # Ancestor Queries, as shown here, are strongly consistent with the High
+        # Replication Datastore. Queries that span entity groups are eventually
+        # consistent. If we omitted the ancestor from this query there would be
+        # a slight chance that Greeting that had just been written would not
+        # show up in a query.
+        greetings_query = Greeting.query(
+            ancestor=guestbook_key(guestbook_name)).order(-Greeting.date)
         greetings = greetings_query.fetch(10)
+
+        for greeting in greetings:
+            if greeting.author:
+                self.response.write(
+                        '<b>%s</b> wrote:' % greeting.author.nickname())
+            else:
+                self.response.write('An anonymous person wrote:')
+            self.response.write('<blockquote>%s</blockquote>' %
+                                cgi.escape(greeting.content))
 
         if users.get_current_user():
             url = users.create_logout_url(self.request.uri)
@@ -82,51 +105,61 @@ class MainPage(webapp2.RequestHandler):
             url = users.create_login_url(self.request.uri)
             url_linktext = 'Login'
 
-        template_values = {
-            'greetings': greetings,
-            'url': url,
-            'url_linktext': url_linktext,
-        }
+        # Write the submission form and the footer of the page
+        sign_query_params = urllib.urlencode({'guestbook_name': guestbook_name})
+        self.response.write(MAIN_PAGE_FOOTER_TEMPLATE %
+                            (sign_query_params, cgi.escape(guestbook_name),
+                             url, url_linktext))
 
-        template = JINJA_ENVIRONMENT.get_template('index.html')
-        self.response.write(template.render(template_values))
 
 class Guestbook(webapp2.RequestHandler):
 
     @pythonDecorator.description
     def post(self):
         """
-        Here is a multi-line description.
-        Blah blah blah.
-        POST method for Guestbook class.
+        Post the entry in the guestbook.
+
+        Args:
+            greeting: Greeting:
+            guestbook_name: string:
+
+        Bindings:
+
+        Returns:
+            form: string:
 
         """
         # We set the same parent key on the 'Greeting' to ensure each greeting
         # is in the same entity group. Queries across the single entity group
         # will be consistent. However, the write rate to a single entity group
         # should be limited to ~1/second.
-        guestbook_name = self.request.get('guestbook_name')
+        guestbook_name = self.request.get('guestbook_name',
+                                          DEFAULT_GUESTBOOK_NAME)
         greeting = Greeting(parent=guestbook_key(guestbook_name))
 
         if users.get_current_user():
-            greeting.author = users.get_current_user().nickname()
+            greeting.author = users.get_current_user()
 
         greeting.content = self.request.get('content')
         greeting.put()
 
         query_params = {'guestbook_name': guestbook_name}
         self.redirect('/?' + urllib.urlencode(query_params))
-        #self.response.headers.add_header('Location',self.request.url + '/?guestbook_name=')
 
 class APIDes(webapp2.RequestHandler):
 
-    # @pythonDecorator.description
     def get(self):
-        data = memcache.get("apidescription")
-        self.response.headers['Content-Type'] = 'application/json'
-        self.response.write(json.encode(data,indent=4,separators=(',', ': ')))
+        valid = pythonDecorator.validate(0)
 
-app = webapp2.WSGIApplication([('/', MainPage),
-                               ('/sign', Guestbook),
-                               ('/options', APIDes)],
-                              debug=True)
+        if (valid == 0):
+            data = memcache.get("apidescription")
+            self.response.headers['Content-Type'] = 'application/json'
+            self.response.write(json.encode(data,indent=4,separators=(',', ': ')))
+        else:
+            print "Error! ", valid
+
+app = webapp2.WSGIApplication([
+    ('/', MainPage),
+    ('/sign', Guestbook),
+    ('/options', APIDes)
+], debug=True)
