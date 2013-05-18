@@ -1,4 +1,4 @@
-from __future__ import with_statement
+#from __future__ import with_statement
 
 import os
 import sys
@@ -16,6 +16,7 @@ from google.appengine.ext import blobstore
 from google.appengine.api import files
 from google.appengine.api import memcache
 
+# declare and initialize global variables
 flag = 0
 processed = []
 classlist = []
@@ -30,7 +31,7 @@ validtypes = [ "bool", "boolean", "none", "type", "int", "long", "float", "compl
                 "frame", "buffer", "dictproxy", "notimplemented", "getsetdescriptor",
                 "memberdescriptor" ]
 dictionary = collections.OrderedDict()
-blobkey = 0
+#blobkey = 0
 
 def description(fn):
 
@@ -42,11 +43,13 @@ def description(fn):
     global types
     global classlist
     global resources
-    global blobkey
+    #global blobkey
 
-    # run staticparse.py at the very beginning
+    # start with information from the configuration file app.yaml
+    # obtained by running staticparse.py exactly once
     if (flag == 0):
         dictionary = staticparse.main()
+
         #api = files.blobstore.create(mime_type='application/octet-stream')
         #with files.open(api, 'a') as f:
             #f.write('data')
@@ -58,6 +61,7 @@ def description(fn):
 
         flag = 1
 
+    # the decorated object is a method
     if (not inspect.isclass(fn)):
         @wraps(fn)
         def inner(*args, **kwargs):
@@ -66,17 +70,23 @@ def description(fn):
                 args_map = inspect.getcallargs(fn, *args, **kwargs)
             docstring = fn.__doc__
 
-            print "**************************************"
+            #print "**************************************"
 
+            # obtain the name of the method's class
             cls = args_map['self'].__class__
             checkproc = fn.__name__ + cls.__name__
 
+            # check to see if this method is in the description yet
             if (checkproc not in processed):
 
+                # add method to list of processed methods
                 processed.append(checkproc)
 
                 update = 0
 
+                # add the method to the class's list of operations
+                # if the class is not in the classlist, add it
+                # if there are other operations already listed, update operations
                 if (cls.__name__ not in classlist):
                     operations = []
                     classlist.append(cls.__name__)
@@ -88,10 +98,13 @@ def description(fn):
                             operations = i[ "Operations" ]
                             break
 
+                # create a dictionary to hold the class's information
+                # obtain name and path of class
                 classdict = collections.OrderedDict()
                 classdict[ "Name" ] = cls.__name__
                 classdict[ "Path" ] = args_map['self'].request.path
 
+                # create a dictionary to hold the method's information
                 methoddict = collections.OrderedDict()
 
                 #methoddict[ "Name" ] = fn.__name__
@@ -103,6 +116,7 @@ def description(fn):
                     #resources.append(classdict)
                     #dictionary[ "resources" ] = resources
 
+                # obtain http method
                 if (fn.__name__ == "get"):
                     methoddict[ "Method" ] = "GET"
                 elif (fn.__name__ == "post"):
@@ -120,22 +134,31 @@ def description(fn):
                 else:
                     methoddict[ "Method" ] = "None"
 
+                # parse the docstring for given information
                 docdict = parsefunctiondoc(docstring)
+
                 print "Arguments? ", docdict[ "Arguments" ]
+
+                # obtain the method's description from the docstring
                 methoddict[ "Description" ] = docdict[ "Description" ]
 
                 print "Parameters? Maybe? ", args_map['self'].request.params
 
+                # check to ensure the method is an http method
                 if (methoddict[ "Method" ] != "None"):
+
+                    # obtain and parse http request for queries
                     print "Request? ", args_map['self'].request
                     query = args_map['self'].request.query_string
                     query = query.split("=")
                     query = query[0].strip()
 
+                    # check for input bindings, as specified in the docstring
                     if (docdict[ "Bindings" ] != "Unspecified"):
 
                         inputbindings = []
 
+                        # update inputbindings, if some have already been given
                         if "Resources" in dictionary:
                             for i in (dictionary[ "Resources" ]):
                                 if (i[ "Name" ] == cls.__name__):
@@ -166,7 +189,8 @@ def description(fn):
 
                         classdict[ "InputBindings" ] = inputbindings
 
-                    # print "Method? ", args_map['self'].request.method
+                    # parse http request for inputs
+                    #print "Method? ", args_map['self'].request.method
                     req = str(args_map['self'].request)
                     req = req.split('\n')
 
@@ -176,8 +200,12 @@ def description(fn):
                             inputtype = i.split(';')
                             break
 
+                    # check for and parse input information (bindings, queries, etc.)
+                    # types and descriptions are obtained from the docstring
                     if (inputtype != [] or query != "" or docdict[ "Bindings" ] != "Unspecified"):
                         inputs = []
+
+                        # create an ordered dictionary for the method's input(s)
                         inputdict = collections.OrderedDict()
                         params = []
                         if (docdict[ "Bindings" ] != "Unspecified"):
@@ -233,10 +261,12 @@ def description(fn):
 
                         methoddict[ "Input" ] = inputs
 
+                    # create an ordered dictionary for the method's output
                     outputdict = collections.OrderedDict()
 
                     print "Response? ", args_map['self'].response
 
+                    # obtain and parse http response
                     resp = str(args_map['self'].response)
                     resp = resp.split('\n')
 
@@ -246,6 +276,8 @@ def description(fn):
                             outputtype = i.split(';')
                             break
 
+                    # check for and parse output information
+                    # types and descriptions are obtained from the docstring
                     if (outputtype != ""):
                         resp = args_map['self'].response
                         code = str(resp).split(' ')
@@ -277,29 +309,35 @@ def description(fn):
                             #outputdict[ "Headers" ] = "None"
                         methoddict[ "Output" ] = outputdict
 
+                    # if errors are specified, include the error information
                     if (docdict[ "Errors" ] != "Unspecified"):
                         methoddict[ "Errors" ] = docdict[ "Errors" ]
 
+                    # add method to the class's list of operations
                     operations.append(methoddict)
                     classdict[ "Operations" ] = operations
 
+                    # if necessary, update the list of resources
                     if (update == 0):
                         resources.append(classdict)
 
+                    # update the main dictionary
                     dictionary[ "Resources" ] = resources
                     dictionary[ "DataTypes" ] = datatypes
 
-                    # data = json.dumps(dictionary,indent=4,separators=(',', ': '))
+                    # obtain the blobkey for the API description
                     data = memcache.get("apidescription")
+
+                    # check to see if an API description exists yet
                     if (data is not None):
                         memcache.replace(key="apidescription", value=dictionary, time=3600)
-                        print "Rewrote here"
+                        #print "Rewrote here"
                     else:
                         memcache.add(key="apidescription", value=dictionary, time=3600)
-                        print "Added"
+                        #print "Added"
 
-                    # print data
-                    print json.dumps(dictionary,indent=4,separators=(',', ': '))
+                    #print data
+                    #print json.dumps(dictionary,indent=4,separators=(',', ': '))
                     #api = blobstore.BlobInfo.get(blobkey)
                     #with files.open(api.filename, 'a') as f:
                     #    f.write(data)
@@ -308,28 +346,48 @@ def description(fn):
 
             return fn(*args, **kwargs)
         return inner
+    # the decorated object is a method-less class
     else:
+        # check to see if the class has been processed yet
         if (not fn.__name__ in classlist):
+
+            # add the class to the classlist
             classlist.append(fn.__name__)
+
+            # parse the class's docstring for its information
             datatypedict = parsedatatypedoc(fn)
+
+            # add the class to the list of datatypes
             datatypes.append(datatypedict)
+
+            # update the main dictionary
             dictionary[ "Resources" ] = resources
             dictionary[ "DataTypes" ] = datatypes
-        # print "Class list: ", classlist
-        print "**************************************"
+
+        #print "Class list: ", classlist
+        #print "**************************************"
+
+        # obtain the blobkey for the API description
         data = memcache.get("apidescription")
+
+        # check to see if an API description exists yet
         if (data is not None):
             memcache.replace(key="apidescription", value=dictionary, time=3600)
-            print "Rewrote here"
+            #print "Rewrote here"
         else:
             memcache.add(key="apidescription", value=dictionary, time=3600)
-            print "Added"
-        print "**************************************"
+            #print "Added"
+        #print "**************************************"
+
         return fn
 
 def parsefunctiondoc(docstring):
     global types
+
+    # create an ordered dictionary to hold information from the docstring
     docdict = collections.OrderedDict()
+
+    # no docstring given
     if (docstring == None):
         docdict[ "Description" ] = "Unspecified"
         docdict[ "Arguments" ] = "Unspecified"
@@ -337,8 +395,12 @@ def parsefunctiondoc(docstring):
         docdict[ "Returns" ] = "Unspecified"
         docdict[ "Errors" ] = "Unspecified"
         return docdict
+
+    # split the docstring into lines and obtain the number of lines
     docstring = docstring.split("\n")
     docsize = len(docstring)
+
+    # one-line docstring
     if (docsize == 1):
         docdict[ "Description" ] = docstring[0].strip()
         docdict[ "Arguments" ] = "Unspecified"
@@ -346,6 +408,8 @@ def parsefunctiondoc(docstring):
         docdict[ "Returns" ] = "Unspecified"
         docdict[ "Errors" ] = "Unspecified"
         return docdict
+
+    # obtain information about description
     docsize = docsize - 1
     description = ""
     i = 0
@@ -362,6 +426,8 @@ def parsefunctiondoc(docstring):
         docdict[ "Returns" ] = "Unspecified"
         docdict[ "Errors" ] = "Unspecified"
         return docdict
+
+    # obtain information about argument(s), including queries
     arguments = []
     i = i + 1
     while(i<docsize):
@@ -397,6 +463,8 @@ def parsefunctiondoc(docstring):
         docdict[ "Returns" ] = "Unspecified"
         docdict[ "Errors" ] = "Unspecified"
         return docdict
+
+    # obtain information about bindings
     while(i<docsize and (not (docstring[i].strip()).startswith("Bindings"))):
         description = description + str(docstring[i].strip()) + " "
         i = i + 1
@@ -454,6 +522,8 @@ def parsefunctiondoc(docstring):
         docdict[ "Returns" ] = "Unspecified"
         docdict[ "Errors" ] = "Unspecified"
         return docdict
+
+    # obtain information about return type
     returns = []
     i = i + 1
     while(i<docsize):
@@ -487,6 +557,8 @@ def parsefunctiondoc(docstring):
     if (i == docsize):
         docdict[ "Errors" ] = "Unspecified"
         return docdict
+
+    # obtain information about errors, if given
     errors = []
     i = i + 1
     while(i<docsize):
@@ -506,26 +578,43 @@ def parsefunctiondoc(docstring):
         errors.append(errdict)
         i = i + 1
     docdict[ "Errors" ] = errors
+
     return docdict
 
 def parsedatatypedoc(classobj):
     global dataTypes
     global validtypes
+
+    # obtain the docstring
     docstring = classobj.__doc__
+
+    # create an ordered dictionary to hold information from the docstring
     classdict = collections.OrderedDict()
+
+    # obtain the name of the class
     classdict[ "Name" ] = classobj.__name__
+
+    # if the class is not in the list of valid datatypes, add it
     if (classdict[ "Name" ] not in validtypes):
         validtypes.append( classdict[ "Name" ].lower() )
+
+    # no docstring given
     if (docstring == None):
         classdict[ "Description" ] = "Unspecified"
         classdict[ "Fields" ] = "Unspecified"
         return classdict
+
+    # split the docstring into lines and obtain the number of lines
     docstring = docstring.split("\n")
     docsize = len(docstring)
+
+    # one-line docstring
     if (docsize == 1):
         classdict[ "Description" ] = docstring[0].strip()
         classdict[ "Fields" ] = "Unspecified"
         return classdict
+
+    # obtain information about description
     docsize = docsize - 1
     description = ""
     i = 0
@@ -539,6 +628,8 @@ def parsedatatypedoc(classobj):
     if (i == docsize):
         classdict[ "Fields" ] = "Unspecified"
         return classdict
+
+    # obtain information about fields
     fields = []
     i = i + 1
     while(i<docsize-1):
@@ -563,6 +654,7 @@ def parsedatatypedoc(classobj):
         fields.append(fielddict)
         i = i + 1
     classdict[ "Fields" ] = fields
+
     return classdict
 
 def validate(num):
@@ -570,6 +662,7 @@ def validate(num):
     global validtypes
     global dictionary
 
+    # check to see where validate function was called from
     if (num == 100):
         print "ERROR: Too many arguments!"
         sys.exit()
@@ -578,6 +671,7 @@ def validate(num):
         print "ERROR: More than one return type!"
         sys.exit()
 
+    # check resources and operations
     if (dictionary[ "Resources" ] == []):
         return 1
     else:
@@ -585,9 +679,10 @@ def validate(num):
             if (i[ "Operations" ] == []):
                 return 2
 
-    # print "Types: ", types
-    # print "Valid Types: ", validtypes
+    #print "Types: ", types
+    #print "Valid Types: ", validtypes
 
+    # check datatypes
     for i in types:
         if (i.lower()) not in validtypes:
             return -1
