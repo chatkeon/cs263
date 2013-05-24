@@ -667,15 +667,6 @@ def validate(self):
     global dictionary
     global errorcodes
 
-    # check to see where validate function was called from
-    #if (num == 100):
-        #print "ERROR: Too many arguments!"
-        #sys.exit()
-
-    #if (num == 200):
-        #print "ERROR: More than one return type!"
-        #sys.exit()
-
     # check resources and operations
     if (dictionary[ "Resources" ] == []):
         errorcodes.append(1)
