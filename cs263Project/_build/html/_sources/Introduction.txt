@@ -30,6 +30,8 @@ Setup
 
 **Note: Do not decorate the get method in the class APIDes**
 
+*Optional: Insert a one-line description of the app into app.yaml file on the line after the application name*
+
 Usage
 ----------------------------------------------------------
 
