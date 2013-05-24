@@ -717,7 +717,7 @@ def validate(self):
             if (i == 200):
                 self.response.write(("- ERROR: Invalid number of return types.\n").replace("\n", "<br />"))
             if (i == -1):
-                self.response.write(("- ERROR: Invalid data type.\n").replace("\n", "<br />"))
+                self.response.write(("- ERROR: Undefined data type.\n").replace("\n", "<br />"))
             if (i == -2):
                 self.response.write(("- ERROR: Information unspecified.\n").replace("\n", "<br />"))
             if (i == -3):
