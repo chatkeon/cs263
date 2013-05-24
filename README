@@ -1,0 +1,11 @@
+API Description Generator
+=========================
+
+Files included in this repository:
+• Leah_Smruthi_Vision.pdf - vision statement for this project
+• guestbook.py, guestbook.pyc, app.yaml, index.yaml, index.html - source code files for a sample web appusing the API Description Generator
+• pythonDecorator.py, pythonDecorator.pyc, staticparse.py, staticparse.pyc - source files for the API Description Generator
+
+Below is a link to the documentation for this project, including instructions on how to set up and use the API Description Generator:
+
+[Link goes here]
