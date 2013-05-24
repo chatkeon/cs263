@@ -3,8 +3,6 @@ import urllib
 
 from google.appengine.api import users
 from google.appengine.ext import ndb
-#from google.appengine.api import memcache
-#from webapp2_extras import json
 
 import webapp2
 import pythonDecorator
@@ -67,14 +65,13 @@ class MainPage(webapp2.RequestHandler):
             guestbook_name: string: name of the guestbook
 
         Bindings:
-            binding1: string: argh: url
 
         Returns:
             db.Key: string: database key for identifying the guestbook
 
         Exceptions:
             404:
-            500: internal server error
+            500:
 
         """
         self.response.write('<html><body>')
@@ -121,8 +118,8 @@ class Guestbook(webapp2.RequestHandler):
         Post the entry in the guestbook.
 
         Args:
-            greeting: Greeting:
-            guestbook_name: string:
+            greeting: Greeting: the greeting to be posted
+            guestbook_name: string: name of the guestbook
 
         Bindings:
 
