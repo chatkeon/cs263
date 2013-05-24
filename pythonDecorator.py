@@ -15,6 +15,7 @@ from google.appengine.ext.webapp import Response
 from google.appengine.ext import blobstore
 from google.appengine.api import files
 from google.appengine.api import memcache
+from webapp2_extras import json
 
 # declare and initialize global variables
 flag = 0
@@ -31,6 +32,7 @@ validtypes = [ "bool", "boolean", "none", "type", "int", "long", "float", "compl
                 "frame", "buffer", "dictproxy", "notimplemented", "getsetdescriptor",
                 "memberdescriptor" ]
 dictionary = collections.OrderedDict()
+errorcodes = []
 #blobkey = 0
 
 def description(fn):
@@ -43,6 +45,7 @@ def description(fn):
     global types
     global classlist
     global resources
+    global errorcodes
     #global blobkey
 
     # start with information from the configuration file app.yaml
@@ -250,7 +253,8 @@ def description(fn):
                                 inputdict = collections.OrderedDict()
                                 inputdict[ "Content type" ] = inputtype
                                 if (len(docdict[ "Arguments" ]) != 1):
-                                    validate(100)
+                                    errorcodes.append(100)
+
                                 inputargs = (docdict[ "Arguments" ])[0]
                                 inputdict[ "Type" ] = inputargs[ "Type" ]
 
@@ -291,7 +295,7 @@ def description(fn):
                         outputdict[ "Type" ] = docdict[ "Returns" ]
 
                         if (len(docdict[ "Returns" ]) != 1):
-                            validate(200)
+                            errorcodes.append(200)
 
                         outputargs = (docdict[ "Returns" ])[0]
                         outputdict[ "Type" ] = outputargs[ "Type" ]
@@ -657,27 +661,28 @@ def parsedatatypedoc(classobj):
 
     return classdict
 
-def validate(num):
+def validate(self):
     global types
     global validtypes
     global dictionary
+    global errorcodes
 
     # check to see where validate function was called from
-    if (num == 100):
-        print "ERROR: Too many arguments!"
-        sys.exit()
+    #if (num == 100):
+        #print "ERROR: Too many arguments!"
+        #sys.exit()
 
-    if (num == 200):
-        print "ERROR: More than one return type!"
-        sys.exit()
+    #if (num == 200):
+        #print "ERROR: More than one return type!"
+        #sys.exit()
 
     # check resources and operations
     if (dictionary[ "Resources" ] == []):
-        return 1
+        errorcodes.append(1)
     else:
         for i in (dictionary[ "Resources" ]):
             if (i[ "Operations" ] == []):
-                return 2
+                errorcodes.append(2)
 
     #print "Types: ", types
     #print "Valid Types: ", validtypes
@@ -685,10 +690,35 @@ def validate(num):
     # check datatypes
     for i in types:
         if (i.lower()) not in validtypes:
-            return -1
+            errorcodes.append(-1)
         if (i == "Unspecified"):
-            return -2
+            errorcodes.append(-2)
         if (i == "Unknown"):
-            return -3
+            errorcodes.append(-3)
 
-    return 0
+    # if api description is valid, display it
+    if (errorcodes == []):
+        data = memcache.get("apidescription")
+        self.response.headers['Content-Type'] = 'application/json'
+        self.response.write(json.encode(data,indent=4,separators=(',', ': ')))
+
+    # if api description is not valid, display the errors
+    else:
+        self.response.write(("API description was not generated.\n").replace("\n", "<br />"))
+        self.response.write(("The following error(s) were found:\n").replace("\n", "<br />"))
+
+        for i in errorcodes:
+            if (i == 1):
+                self.response.write(("- ERROR: No resources found.\n").replace("\n", "<br />"))
+            if (i == 2):
+                self.response.write(("- ERROR: Resource with no operations.\n").replace("\n", "<br />"))
+            if (i == 100):
+                self.response.write(("- ERROR: Incorrect number of arguments.\n").replace("\n", "<br />"))
+            if (i == 200):
+                self.response.write(("- ERROR: Invalid number of return types.\n").replace("\n", "<br />"))
+            if (i == -1):
+                self.response.write(("- ERROR: Invalid data type.\n").replace("\n", "<br />"))
+            if (i == -2):
+                self.response.write(("- ERROR: Information unspecified.\n").replace("\n", "<br />"))
+            if (i == -3):
+                self.response.write(("- ERROR: Information unknown.\n").replace("\n", "<br />"))

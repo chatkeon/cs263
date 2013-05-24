@@ -3,8 +3,8 @@ import urllib
 
 from google.appengine.api import users
 from google.appengine.ext import ndb
-from google.appengine.api import memcache
-from webapp2_extras import json
+#from google.appengine.api import memcache
+#from webapp2_extras import json
 
 import webapp2
 import pythonDecorator
@@ -64,7 +64,7 @@ class MainPage(webapp2.RequestHandler):
         Get the guestbook entries to display on the main page.
 
         Args:
-            guestbook_name: string: the name of the guestbook
+            guestbook_name: string: name of the guestbook
 
         Bindings:
 
@@ -149,14 +149,7 @@ class Guestbook(webapp2.RequestHandler):
 class APIDes(webapp2.RequestHandler):
 
     def get(self):
-        valid = pythonDecorator.validate(0)
-
-        if (valid == 0):
-            data = memcache.get("apidescription")
-            self.response.headers['Content-Type'] = 'application/json'
-            self.response.write(json.encode(data,indent=4,separators=(',', ': ')))
-        else:
-            print "Error! ", valid
+        pythonDecorator.validate(self)
 
 app = webapp2.WSGIApplication([
     ('/', MainPage),
