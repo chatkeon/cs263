@@ -25,7 +25,7 @@ def main():
         line = line.split("#")
         dictionary[ "Description" ] = line[1].strip()
     else:
-        dictionary[ "Description" ] = "Unspecified"
+        dictionary[ "Description" ] = "Description of " + str(dictionary[ "Name" ])
         line = line.split(":")
         dictionary[ "Version" ] = line[1].strip()
 
