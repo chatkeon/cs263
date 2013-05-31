@@ -14,7 +14,7 @@ The docstring for each method-less class should be formatted as follows::
 
 		"""
 		Class description line1
-		[Class description lne2]
+		[Class description line2]
 
 		Attributes:
 			name: type: [description]
