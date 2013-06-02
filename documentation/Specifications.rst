@@ -58,11 +58,11 @@ Note the following:
 
 Again, everything in square brackets is optional.
 
-**The category labels (Args, Bindings, Returns, and Exceptions) are mandatory. Please ensure they are there as shown above, even if the category is not applicable.**
+**Note: The category labels (Args, Bindings, Returns, and Exceptions) are mandatory. Please ensure they are given as shown above, even if the category is not applicable.**
 
-*Bindings and exceptions can be left blank if desired.*
+*Optional: Bindings and exceptions can be left blank if desired.*
 
-For an example of docstring format see the sample application at https://github.com/chatkeon/cs263 .
+For an example of docstring format see the sample application at https://github.com/chatkeon/cs263.
 
 .. _validations:
 
@@ -79,7 +79,7 @@ An API description is valid if it satisfies the following conditions:
 * There are no references to undefined types
 * There are no references to undefined input bindings
 
-**Note that the above conditions allow for many information (fields) to be left out from an API specification. For instance all the description fields, error fields, and header fields can be left out. Also all the non-functional fields such as license, community and tags can be left out from an API specification.** [1]_
+**Note: The above conditions allow for many information (fields) to be left out from an API specification. For instance all the description fields, error fields, and header fields can be left out. Also all the non-functional fields such as license, community and tags can be left out from an API specification.** [1]_
 
 The following are the valid primitive data types:
 
@@ -128,4 +128,4 @@ Based on the above specifications for a valid API description the following erro
 The first two errors listed above probably indicate that you have not clicked through all the possible paths in your app.
 
 .. rubric:: Footnotes
-.. [1] Hiranya Jayathilaka - API Validation guidelines 
+.. [1] Hiranya Jayathilaka, RACE Lab, Department of Computer Science, UCSB - API Validation guidelines
