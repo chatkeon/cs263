@@ -6,6 +6,7 @@ Files included in this repository:
 • guestbook.py, guestbook.pyc, app.yaml, index.yaml, index.html - source code files for a sample web app using the API Description Generator
 • pythonDecorator.py, pythonDecorator.pyc, staticparse.py, staticparse.pyc - source files for the API Description Generator
 • documentation - directory containing the files for the project's Sphinx documentation
+• report.pdf - formal write-up of the project
 
 Below is a link to the documentation for this project, including instructions on how to set up and use the API Description Generator:
 
