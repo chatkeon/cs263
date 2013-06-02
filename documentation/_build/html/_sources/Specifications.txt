@@ -52,7 +52,7 @@ The docstring for each http method should be formatted as follows::
 Note the following:
 
 *  Only one or two arguments are expected, where one will be the input of the http method and the other will be a query, should it exist 
-*  Two types of bindings are expected, url and load balancing; these are input parameters accepted by the operations
+*  Two types of bindings are expected, url and header; these are input parameters that can be accepted by the operations
 *  Only one return type is expected; this should be the output type of the http method if it exists
 *  Any http exceptions that could be raised should be specified
 
