@@ -140,18 +140,18 @@ def description(fn):
                 # parse the docstring for given information
                 docdict = parsefunctiondoc(docstring)
 
-                print "Arguments? ", docdict[ "Arguments" ]
+                #print "Arguments? ", docdict[ "Arguments" ]
 
                 # obtain the method's description from the docstring
                 methoddict[ "Description" ] = docdict[ "Description" ]
 
-                print "Parameters? Maybe? ", args_map['self'].request.params
+                #print "Parameters? Maybe? ", args_map['self'].request.params
 
                 # check to ensure the method is an http method
                 if (methoddict[ "Method" ] != "None"):
 
                     # obtain and parse http request for queries
-                    print "Request? ", args_map['self'].request
+                    #print "Request? ", args_map['self'].request
                     query = args_map['self'].request.query_string
                     query = query.split("=")
                     query = query[0].strip()
@@ -230,7 +230,7 @@ def description(fn):
                                         (docdict[ "Arguments" ]).remove(i)
                                         break
 
-                            print "Doc string? ", docdict[ "Arguments" ]
+                            #print "Doc string? ", docdict[ "Arguments" ]
 
                             if (type == ""):
                                 type = "Unspecified"
@@ -263,12 +263,13 @@ def description(fn):
 
                                 inputs.append(inputdict)
 
-                        methoddict[ "Input" ] = inputs
+                        if (inputs != []):
+                            methoddict[ "Input" ] = inputs
 
                     # create an ordered dictionary for the method's output
                     outputdict = collections.OrderedDict()
 
-                    print "Response? ", args_map['self'].response
+                    #print "Response? ", args_map['self'].response
 
                     # obtain and parse http response
                     resp = str(args_map['self'].response)
@@ -315,7 +316,8 @@ def description(fn):
 
                     # if errors are specified, include the error information
                     if (docdict[ "Errors" ] != "Unspecified"):
-                        methoddict[ "Errors" ] = docdict[ "Errors" ]
+                        if (docdict[ "Errors" ] != []):
+                            methoddict[ "Errors" ] = docdict[ "Errors" ]
 
                     # add method to the class's list of operations
                     operations.append(methoddict)
